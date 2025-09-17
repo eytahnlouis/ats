@@ -95,12 +95,24 @@ class JobListAPIView(generics.ListAPIView):
     filter_backends = [DjangoFilterBackend]
     filterset_class = JobFilter
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
 class CandidatesByJobAPIView(ListAPIView):
     serializer_class = CandidateListSerializer
+    permission_classes = [IsAuthenticated]
+
     def get_queryset(self):
         job_id = self.kwargs["job_id"]
         return Candidate.objects.filter(job_id=job_id).order_by("-score", "-created_at")
 
 #UP-S : name of the algortithm used to score the resume
+class JobDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    Permet de récupérer, modifier ou supprimer une offre d'emploi spécifique.
+    GET    /api/cvs/jobs/<id>/     → détail du job
+    PUT    /api/cvs/jobs/<id>/     → update complet
+    PATCH  /api/cvs/jobs/<id>/     → update partiel
+    DELETE /api/cvs/jobs/<id>/     → suppression
+    """
+    queryset = Job.objects.all()
+    serializer_class = JobSerializer
+    permission_classes = [IsAuthenticated]  # ou [AllowAny] si tu veux public
+    lookup_field = 'id'

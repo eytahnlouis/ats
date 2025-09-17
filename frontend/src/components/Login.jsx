@@ -20,7 +20,7 @@ export default function Login() {
       localStorage.setItem("access_token", res.data.access);
       localStorage.setItem("refresh_token", res.data.refresh);
       setError("");
-      navigate("/"); // Redirige vers accueil
+      navigate("/admin"); // Redirige vers la page admin
       window.location.reload(); // Pour mettre à jour la navbar
     } catch {
       setError("Identifiants invalides");

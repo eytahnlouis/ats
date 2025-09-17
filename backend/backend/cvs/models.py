@@ -47,7 +47,7 @@ class Candidate(models.Model): # Candidate model to store information about job 
     - email: EmailField
     - phone: CharField (max_length=20)
     - resume: FileField (upload_to='resumes/')
-    - date_de_postulat: DateTimeField (auto_now_add=True)
+    - date_of_applying: DateTimeField (auto_now_add=True)
     """
 
     id = models.UUIDField(
