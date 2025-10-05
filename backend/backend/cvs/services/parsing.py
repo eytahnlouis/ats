@@ -31,6 +31,7 @@ def extract_text_from_ocr(file_path):
     
     
     image = Image.open(file_path) # Open the image file
+    image = image.convert('RGB') # Convert image to RGB (if needed)
     text = pytesseract.image_to_string(image) # Perform OCR on the image
     return text # Return the extracted text
 
@@ -55,10 +56,21 @@ if __name__ == "__main__" :
         try:
             file_path = input("Enter the path to the file: ") # Get the file path from user
             if not os.path.exists(file_path): # Check if the file exists
-                print("File does not exist. Please try again.")
+                raise ValueError("File does not exist. Please try again.")
                 continue
             text = extract_text_from_file(file_path) # Extract text from the file
-            print([text]) # Print the extracted text
             break
         except Exception as e:
-            print(f"An error occurred: {e}") # Print any errors that occur
+             raise ValueError(f"Unsupported file type: {e}") # Raise error for unsupported file types
+
+'''
+    Lors de l'upload, installer Tesseract OCR et ajouter au PATH
+    sudo apt install tesseract-ocr
+    sudo apt install libtesseract-dev
+    pip install pytesseract
+    pip install python-docx
+    pip install PyMuPDF
+    pip install Pillow
+'''
+
+

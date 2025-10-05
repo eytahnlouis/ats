@@ -3,7 +3,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status, generics
 from rest_framework.permissions import IsAuthenticated
-from .models import Candidate, Job
+from .models import Candidate, Job, Resume
 from .serializers import CandidateSerializer, CandidateListSerializer
 from .services.scoring import score_resume
 from rest_framework.permissions import IsAuthenticated
@@ -25,23 +25,34 @@ class JobCreateAPIView(APIView):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])  # Allow any user to upload a CV
-def upload_and_score(request: CandidateSerializer):
+def upload_and_score(request):
     serializer = CandidateSerializer(data=request.data)
     if serializer.is_valid():
-        candidate = serializer.save(user=request.user)  # Associe le candidat à l'utilisateur authentifié
-        # Appel de la fonction de scoring
+        candidate = serializer.save(user=request.user)
+        
+        # Calcul du score si un CV est présent
+        score = 0.0
         try:
-            s = score_resume(candidate)  # doit retourner un float/int
-        except Exception:
-            s = 0
-        candidate.score = s
-        candidate.save()
+            job_id = request.data.get("job")
+            # Récupérer le CV le plus récent du candidat
+            latest_resume = candidate.resumes.order_by('-uploaded_at').first()
+            
+            if latest_resume and latest_resume.file and job_id:
+                score = score_resume(latest_resume.file.path, str(job_id))
+        except Exception as e:
+            # Logger l'erreur pour le debugging
+            raise ValueError(f"Erreur lors du calcul de score pour candidat {candidate.id}: {e}")
+            score = 0.0
+        
+        candidate.score = score
+        candidate.save(update_fields=['score'])
+        
         return Response({
             "candidate": CandidateSerializer(candidate).data,
-            "score": s
+            "score": score
         }, status=status.HTTP_201_CREATED)
+    
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def list_user_candidates(request):

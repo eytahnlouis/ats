@@ -1,10 +1,10 @@
 from rest_framework import serializers
-from .models import Job, Keyword, Candidate
+from .models import Job, Keyword, Candidate, Resume
 from django.db import transaction
 
 
 class CandidateSerializer(serializers.ModelSerializer): # Candidate serializer to convert Candidate model instances to JSON and vice versa
-    class Meta:
+    class Meta: # Candidate serializer metadata
         model = Candidate
         fields = ("id", "name", "email", "phone", "resume", "job") # Include job field for associating candidate with a job
         read_only_fields = ['score', 'id', 'created_at']
@@ -63,3 +63,35 @@ class JobSerializer(serializers.ModelSerializer): # Job serializer to convert Jo
                 Keyword.objects.bulk_create(kws)
 
         return instance
+    
+class JobListSerializer(serializers.ModelSerializer): # Serializer for listing jobs with limited fields
+    class Meta:
+        model = Job
+        fields = ['id', 'title', 'location', 'created_at', 'is_active']
+        read_only_fields = ['id', 'created_at']
+
+class ResumeSerializer(serializers.ModelSerializer):
+    candidate_name = serializers.CharField(source='candidate.name', read_only=True)
+    file_size_mb = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Resume
+        fields = ['id', 'file', 'uploaded_at', 'candidate', 'candidate_name', 'file_size_mb']
+        read_only_fields = ['id', 'uploaded_at']
+         
+    def get_file_size_mb(self, obj):
+        return round(obj.size / (1024 * 1024), 2) if obj.size else None 
+    
+    def validate_file(self, value):
+        # Validation du type de fichier
+        allowed_types = ['application/pdf', 'application/msword', 
+                         'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+        if not value.content_type or value.content_type not in allowed_types:
+            raise serializers.ValidationError("Type de fichier non supporté. Seuls les PDF et Word sont autorisés.")
+        
+        # Validation de la taille du fichier (max 3MB)
+        max_size = 3 * 1024 * 1024  # 3MB
+        if value.size >= max_size:
+            raise serializers.ValidationError("La taille du fichier dépasse la limite de 5MB.")
+        
+        return value
