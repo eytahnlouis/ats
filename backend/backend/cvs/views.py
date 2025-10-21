@@ -12,8 +12,8 @@ from django_filters.rest_framework import DjangoFilterBackend
 from .filters import JobFilter
 import logging
 from django.db import transaction
-
-logger = logging.getLogger(__name__)
+from django_ratelimit.decorators import ratelimit
+logger = logging.getLogger(__name__) # Configure logger for this module
 
 
 class JobCreateAPIView(APIView):
@@ -24,6 +24,7 @@ class JobCreateAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        """ Handle POST request to create a new job """
         serializer = JobSerializer(data=request.data)
         if serializer.is_valid():
             job = serializer.save()
@@ -54,40 +55,59 @@ class JobDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
     lookup_field = 'id'
 
 
-@api_view(['POST'])
-@permission_classes([AllowAny])  # Allow any user to upload a CV
-@transaction.atomic
-def upload_and_score(request):
+class UploadAndScoreAPIView(APIView):
     """
-    Upload a candidate's CV and calculate the matching score against a job.
-    Returns the candidate data and the score.
+    API view to handle uploading a candidate's CV and scoring it against a job.
+    Supports both authenticated and anonymous users.
     """
-    serializer = CandidateSerializer(data=request.data)
-    if serializer.is_valid():
-        candidate = serializer.save(user=request.user)
-        
-        # Calculate score if a CV is present
-        score = 0.0
-        try:
-            job_id = request.data.get("job")
-            latest_resume = candidate.resumes.order_by('-uploaded_at').first()
-            
-            if latest_resume and latest_resume.file and job_id:
-                score = score_resume(latest_resume.file.path, str(job_id))
-        except Exception as e:
-            # Log l'erreur sans interrompre le processus
-            logger.error(f"Erreur lors du calcul de score pour candidat {candidate.id}: {e}")
-            score = 0.0
-        
-        candidate.score = score
-        candidate.save(update_fields=['score'])
-        
-        return Response({
-            "candidate": CandidateSerializer(candidate).data,
-            "score": score
-        }, status=status.HTTP_201_CREATED)
+    permission_classes = [AllowAny]
     
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    def dispatch(self, request, *args, **kwargs):
+        # Applique le ratelimit sur toute la view DRF
+        # block=True => renvoie 429 si limite dépassée
+        decorated = ratelimit(key='ip', rate='3/m', method='POST', block=True)(super().dispatch)
+        return decorated(request, *args, **kwargs)
+    @transaction.atomic
+    def post(self, request):
+        """
+        Upload a candidate's CV and calculate the matching score against a job.
+        Returns the candidate data and the score.
+        Supports both authenticated and anonymous users.
+        """
+        serializer = CandidateSerializer(data=request.data)
+        if serializer.is_valid():
+            # Associer l'utilisateur seulement s'il est authentifié
+            if request.user and request.user.is_authenticated:
+                candidate = serializer.save(user=request.user)
+                logger.info(f"Candidat {candidate.id} créé par utilisateur authentifié {candidate.user.id}")
+            else:
+                candidate = serializer.save(user=None)
+                logger.info(f"Candidat {candidate.id} créé en mode anonyme: {candidate.phone}, {candidate.email}")
+        
+            # Calculate score if a CV is present
+            score = 0.0
+            try:
+                job_id = request.data.get("job")
+                # Récupère le CV le plus récent du candidat
+                latest_resume = Resume.objects.filter(candidate=candidate).order_by('-uploaded_at').first()
+
+                if latest_resume and latest_resume.file and job_id:
+                    score = score_resume(latest_resume.file.path, str(job_id))
+                elif not latest_resume:
+                    logger.warning(f"Aucun CV trouvé pour candidat {candidate.id}")
+            except Exception as e:
+                # Log l'erreur sans interrompre le processus
+                logger.error(f"Erreur lors du calcul de score pour candidat {candidate.id}: {e}", exc_info=True)
+                score = 0.0
+            
+            candidate.score = score
+            candidate.save(update_fields=['score'])
+            
+            return Response({
+                "candidate": CandidateSerializer(candidate).data,
+                "score": score
+            }, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(['GET'])
@@ -128,3 +148,35 @@ class CandidatesByJobAPIView(ListAPIView):
     def get_queryset(self):
         job_id = self.kwargs["job_id"]
         return Candidate.objects.filter(job_id=job_id).order_by("-score", "-created_at")
+
+class UploadResumeAPIView(APIView):
+    """
+    API view to handle uploading a resume for a candidate.
+    Allowed for all users,
+    """
+    permission_classes = [AllowAny]
+
+    def dispatch(self, request, *args, **kwargs):
+        # Applique le ratelimit sur toute la view DRF
+        # block=True => renvoie 429 si limite dépassée
+        decorated = ratelimit(key='ip', rate='3/m', method='POST', block=True)(super().dispatch)
+        return decorated(request, *args, **kwargs)
+
+
+    def post(self, request, candidate_id):
+        """
+        Upload a resume file for the specified candidate.
+        """
+        try:
+            candidate = Candidate.objects.get(id=candidate_id, user=request.user)
+        except Candidate.DoesNotExist:
+            return Response({"detail": "Candidate not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if 'file' not in request.FILES:
+            return Response({"detail": "No file provided."}, status=status.HTTP_400_BAD_REQUEST)
+
+        resume_file = request.FILES['file']
+        resume = Resume.objects.create(candidate=candidate, file=resume_file)
+        return Response({"detail": "Resume uploaded successfully.", "resume_id": resume.id}, status=status.HTTP_201_CREATED)
+    
+                        

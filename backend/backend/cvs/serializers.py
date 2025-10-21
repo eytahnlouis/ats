@@ -6,8 +6,11 @@ from django.db import transaction
 class CandidateSerializer(serializers.ModelSerializer): # Candidate serializer to convert Candidate model instances to JSON and vice versa
     class Meta: # Candidate serializer metadata
         model = Candidate
-        fields = ("id", "name", "email", "phone", "resume", "job") # Include job field for associating candidate with a job
-        read_only_fields = ['score', 'id', 'created_at']
+        fields = (
+            "id", "name", "email", "phone", 
+            "job", "score", "created_at"  # ✅ Ajout de score et created_at
+        )
+        read_only_fields = ['id', 'created_at']  # ✅ Cohérence
 
 class CandidateListSerializer(serializers.ModelSerializer): # Serializer for listing candidates with limited fields
     class Meta:
@@ -33,8 +36,8 @@ class JobSerializer(serializers.ModelSerializer): # Job serializer to convert Jo
         job = Job.objects.create(**validated_data, is_active=True) # Default to active job
         # Now handle the keywords
         for keyword in keywords_data:
-            kw, _ = Keyword.objects.get_or_create(word=keyword['word'], defaults={'weight': keyword['weight']})
-            job.keywords.add(kw)
+            kw, _ = Keyword.objects.get_or_create(word=keyword['word'], defaults={'weight': keyword['weight']}) 
+            job.keywords.add(kw) # Associate keyword with job
         return job
 
     from django.db import transaction
@@ -60,7 +63,7 @@ class JobSerializer(serializers.ModelSerializer): # Job serializer to convert Jo
                     })
                     for kw in keywords_data
                 ]
-                Keyword.objects.bulk_create(kws)
+                Keyword.objects.bulk_create(kws) # Utilisation de bulk_create pour l'efficacité
 
         return instance
     

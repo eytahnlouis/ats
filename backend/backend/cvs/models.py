@@ -14,8 +14,8 @@ class Keyword(models.Model):
     - mot: CharField (max_length=100, unique=True)
     - poids: FloatField (default=1.0)
     """
-    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
-    word = models.CharField(max_length=100, unique=True)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    word = models.CharField(max_length=100, unique= False)
     weight = models.FloatField(default=1.0)
 
     def __str__(self):
@@ -34,10 +34,10 @@ class Job(models.Model): # Job model to store information about job postings
 
     """
 
-    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=255)
     description = models.TextField()
-    location = models.CharField(max_length=100, blank=True)
+    location = models.CharField(max_length=100, blank=True, default="Paris")
     keywords = models.ManyToManyField('Keyword', blank=True)  # Lié aux mots-clés de scoring
     created_at = models.DateTimeField(auto_now_add=True)
     is_active = models.BooleanField(default=True)
@@ -54,7 +54,6 @@ class Candidate(models.Model): # Candidate model to store information about job 
     - nom_prenom: CharField (max_length=255)
     - email: EmailField
     - phone: CharField (max_length=20)
-    - resume: FileField (upload_to='resumes/')
     - date_of_applying: DateTimeField (auto_now_add=True)
     """
 

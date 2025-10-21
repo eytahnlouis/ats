@@ -1,6 +1,5 @@
-import os
 import re
-from typing import Dict, Set
+from typing import Dict
 from .parsing import extract_text_from_file
 from .keyword_cache import keyword_cache
 
