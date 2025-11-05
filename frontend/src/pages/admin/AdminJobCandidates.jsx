@@ -11,7 +11,8 @@ export default function AdminJobCandidates() {
     (async () => {
       try {
         const res = await axios.get(
-          `http://127.0.0.1:8000/api/cvs/jobs/${id}/candidates/`
+          `http://127.0.0.1:8000/api/cvs/jobs/${id}/candidates/`,
+          { headers: { Authorization: `Bearer ${localStorage.getItem("access_token")}` } }
         );
         setRows(res.data);
       } catch (e) {

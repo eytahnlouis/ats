@@ -3,31 +3,36 @@ import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import ChecklistJob from "../../components/ChecklistJob";
 export default function AdminJobForm() {
-  const { id } = useParams(); // si présent → mode edit
+  const { id } = useParams(); // id du job à éditer, si existant
   const nav = useNavigate();
   const [title, setTitle] = useState("");
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
   const [err, setErr] = useState("");
   const [keywords, setKeywords] = useState([]); // existant : input CSV
-  const [checklistKeywords, setChecklistKeywords] = useState([]); // reçu depuis ChecklistJob
 
   useEffect(() => {
     const load = async () => {
       if (!id) return;
       try {
-        const res = await axios.get(`http://127.0.0.1:8000/api/cvs/jobs/`);
-        const job = res.data.find((j) => j.id === id);
-        if (job) {
-          setTitle(job.title);
-          setLocation(job.location || "");
-          setDescription(job.description || "");
-          setKeywords(
-            Array.isArray(job.keywords) ? job.keywords : job.keywords || []
-          );
-        }
+        const token = localStorage.getItem("access_token");
+        const res = await axios.get(
+          `http://127.0.0.1:8000/api/cvs/jobs/${id}/`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        const job = res.data;
+        setTitle(job.title || "");
+        setLocation(job.location || "");
+        setDescription(job.description || "");
+        setKeywords(Array.isArray(job.keywords) ? job.keywords : []);
       } catch (e) {
-        setErr(e.message);
+        if (e.response?.status === 404) {
+          setErr("Offre non trouvée");
+        } else {
+          setErr(e.response?.data?.detail || e.message);
+        }
       }
     };
     load();
@@ -49,15 +54,18 @@ export default function AdminJobForm() {
     setErr("");
     const token = localStorage.getItem("access_token");
     // Ensure keywordsArray is always an array of trimmed strings
-    const keywordsArray =
-      checklistKeywords && checklistKeywords.length > 0
-        ? checklistKeywords.map((k) => ({
-            word: String(k.word || "").trim(),
-            weight: Number.isFinite(+k.weight) ? +k.weight : 1.0,
-          }))
-        : Array.isArray(keywords)
-        ? keywords.map((w) => ({ word: String(w || "").trim(), weight: 1.0 }))
-        : [];
+    // ✅ Validation et normalisation simplifiées
+    const keywordsArray = keywords
+      .filter((k) => k.word?.trim()) // Filtrer les vides
+      .map((k) => ({
+        word: k.word.trim().toLowerCase(), // Normalisation cohérente
+        weight: Number.isFinite(+k.weight) ? +k.weight : 1.0,
+      }));
+
+    if (keywordsArray.length === 0) {
+      setErr("Veuillez ajouter au moins un mot-clé");
+      return;
+    }
 
     try {
       if (id) {
@@ -83,7 +91,7 @@ export default function AdminJobForm() {
           { headers: { Authorization: `Bearer ${token}` } }
         );
       }
-      nav("/admin");
+      //nav("/admin");
     } catch (e) {
       // si token invalide, tenter un refresh puis réessayer une fois
       const apiCode = e.response?.data?.code;
@@ -137,7 +145,7 @@ export default function AdminJobForm() {
           value={description}
           onChange={(e) => setDescription(e.target.value)}
         />
-        <ChecklistJob onChange={setChecklistKeywords} />
+        <ChecklistJob keywords={keywords} onChange={setKeywords} />
         <button type="submit">{id ? "Mettre à jour" : "Créer"}</button>
       </form>
     </div>

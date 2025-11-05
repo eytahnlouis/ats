@@ -8,7 +8,6 @@ export default function Jobs() {
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
-
   useEffect(() => {
     async function fetchJobs() {
       try {
@@ -42,7 +41,8 @@ export default function Jobs() {
         >
           <h3>{job.title}</h3>
           <p>
-            <b>Description:</b> {job.description}
+            <b>Description:</b>{" "}
+            <span style={{ whiteSpace: "pre-wrap" }}>{job.description}</span>
           </p>
           <p>
             <b>Lieu:</b> {job.location}
@@ -52,9 +52,7 @@ export default function Jobs() {
             {job.keywords && job.keywords.length > 0 ? (
               <ul>
                 {job.keywords.map((kw, i) => (
-                  <li key={i}>
-                    {kw.word}
-                  </li>
+                  <li key={i}>{kw.word}</li>
                 ))}
               </ul>
             ) : (
@@ -69,9 +67,9 @@ export default function Jobs() {
                 borderRadius: 4,
                 cursor: "pointer",
               }}
-              onClick={() => { 
+              onClick={() => {
                 // Logique pour postuler au job
-                 navigate(`/upload?job_id=${job.id}`);
+                navigate(`/upload?job_id=${job.id}`);
               }}
             >
               Postuler

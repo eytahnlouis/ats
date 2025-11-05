@@ -14,23 +14,6 @@ export default function AdminJobs() {
       setErr(e.message);
     }
   };
-
-  const toggleJob = async (id) => {
-    try {
-      const token = localStorage.getItem("access_token"); // stocke ton access token après login
-      await axios.post(
-        `http://127.0.0.1:8000/api/cvs/my-candidates/${id}/`,
-        {},
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      fetchJobs();
-    } catch (e) {
-      alert("Erreur toggle: " + (e.response?.data || e.message));
-    }
-  };
-
   const delJob = async (id) => {
     if (!confirm("Supprimer ce job ?")) return;
     try {
@@ -81,7 +64,6 @@ export default function AdminJobs() {
               <td style={{ display: "flex", gap: 8 }}>
                 <Link to={`/admin/jobs/${j.id}/candidates`}>👥</Link>
                 <Link to={`/admin/jobs/${j.id}/edit`}>✏️</Link>
-                <button onClick={() => toggleJob(j.id)}>On/Off</button>
                 <button
                   onClick={() => delJob(j.id)}
                   style={{ color: "crimson" }}

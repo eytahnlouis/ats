@@ -7,9 +7,11 @@ from .views import (
     JobListAPIView,
     CandidatesByJobAPIView,
     JobDetailAPIView,
+    UploadResumeAPIView
 )
 urlpatterns = [
     path('upload/', upload_and_score.as_view(), name='upload_and_score'), # Endpoint to upload and score a CV
+    path('upload-resume/<uuid:candidate_id>/', UploadResumeAPIView.as_view(), name='upload_and_score_resume'), # Endpoint to upload a resume for a specific candidate
     path('my-candidates/', list_user_candidates, name='list_user_candidates'), # Endpoint to list all candidates for the authenticated user
     path('top/', list_top_candidates, name='list_top_candidates'), # Endpoint to list top candidates
     path('jobs/create/', JobCreateAPIView.as_view(), name='create-job'), # Endpoint to create a job posting

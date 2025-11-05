@@ -15,11 +15,11 @@ class Keyword(models.Model):
     - poids: FloatField (default=1.0)
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    word = models.CharField(max_length=100, unique= False)
+    word = models.CharField(max_length=100, unique=False)
     weight = models.FloatField(default=1.0)
 
     def __str__(self):
-        return f"{self.word} (Poids: {self.weight}) ({self.associated_jobs.count()} jobs)"
+        return f"{self.word} (Poids: {self.weight})"
 
 class Job(models.Model): # Job model to store information about job postings
     """ 

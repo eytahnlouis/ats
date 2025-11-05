@@ -8,9 +8,9 @@ class CandidateSerializer(serializers.ModelSerializer): # Candidate serializer t
         model = Candidate
         fields = (
             "id", "name", "email", "phone", 
-            "job", "score", "created_at"  # ✅ Ajout de score et created_at
+            "job", "score", "created_at"  
         )
-        read_only_fields = ['id', 'created_at']  # ✅ Cohérence
+        read_only_fields = ['id', 'created_at'] 
 
 class CandidateListSerializer(serializers.ModelSerializer): # Serializer for listing candidates with limited fields
     class Meta:
@@ -31,12 +31,15 @@ class JobSerializer(serializers.ModelSerializer): # Job serializer to convert Jo
         fields = ['id', 'title', 'description', 'location', 'keywords', 'created_at', 'is_active']
 
     def create(self, validated_data):
-        keywords_data = validated_data.pop('keywords') # Extract keywords data from validated_data
+        keywords_data = validated_data.pop('keywords', []) # Extract keywords data from validated_data
         # Create the Job instance without keywords first
         job = Job.objects.create(**validated_data, is_active=True) # Default to active job
-        # Now handle the keywords
-        for keyword in keywords_data:
-            kw, _ = Keyword.objects.get_or_create(word=keyword['word'], defaults={'weight': keyword['weight']}) 
+        # Now handle the keywords - create new instances for each job
+        for keyword_data in keywords_data:
+            kw = Keyword.objects.create(
+                word=keyword_data['word'],
+                weight=keyword_data.get('weight', 1.0)
+            )
             job.keywords.add(kw) # Associate keyword with job
         return job
 
@@ -53,17 +56,15 @@ class JobSerializer(serializers.ModelSerializer): # Job serializer to convert Jo
 
         if keywords_data is not None:
             with transaction.atomic():
-                instance.keywords.all().delete()
-                kws = [
-                    Keyword(job=instance, **{
-                        'id': kw.get('id'),
-                        'word': str(kw.get('word','')).strip(),
-                        'weight': float(kw.get('weight', 1.0))
-                        # ajouter autres champs si nécessaire
-                    })
-                    for kw in keywords_data
-                ]
-                Keyword.objects.bulk_create(kws) # Utilisation de bulk_create pour l'efficacité
+                # Supprime les anciens keywords de ce job
+                instance.keywords.clear()
+                # Crée de nouveaux keywords
+                for keyword_data in keywords_data:
+                    kw = Keyword.objects.create(
+                        word=keyword_data['word'],
+                        weight=keyword_data.get('weight', 1.0)
+                    )
+                    instance.keywords.add(kw)
 
         return instance
     
@@ -80,7 +81,7 @@ class ResumeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Resume
         fields = ['id', 'file', 'uploaded_at', 'candidate', 'candidate_name', 'file_size_mb']
-        read_only_fields = ['id', 'uploaded_at']
+        read_only_fields = ['id', 'uploaded_at', 'candidate']
          
     def get_file_size_mb(self, obj):
         return round(obj.size / (1024 * 1024), 2) if obj.size else None 

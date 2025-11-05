@@ -1,52 +1,41 @@
-import { useState } from "react";
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
+import { v4 as uuidv4 } from "uuid";
 
-export default function ChecklistJob({ onChange }) {
-  const [keywords, setKeywords] = useState([{ id: 1, word: "exemple", weight: 1.0 }]);
-
-  const Importance = {
-    "HIGH": 5.0,
-    "MEDIUM-HIGH": 4.0,
-    "MEDIUM": 3.0,
-    "MEDIUM-LOW": 2.0,
-    "LOW": 1.0,
-  };
+export default function ChecklistJob({ keywords: initialKeywords = [], onChange }) {
+  const [keywords, setKeywords] = useState(initialKeywords);
+    useEffect(() => {
+      setKeywords(initialKeywords);
+    }, [initialKeywords]);
 
   const style = {
     display: "flex",
     flexDirection: "row",
     gap: "12px",
-    padding: "16px",
+    padding: "6px",
   };
   const [newWord, setNewWord] = useState(""); // pour l'input du nouveau mot
   const [newWeight, setNewWeight] = useState(1.0); // pour l'input du poids
 
   const addKeyword = () => {
     if (!newWord.trim()) return;
-    setKeywords((...prev) => {
-      const maxId = prev.length
-        ? Math.max(0, ...prev.map((k) => Number(k.id || 0)))
-        : 0;
-      const newId = maxId + 1;
-      const weight = Number.isFinite(+newWeight) ? +newWeight : 1.0;
-      return [{ id: newId, word: newWord.trim(), weight }];
+    const newId = uuidv4();
+    const weight = Number.isFinite(+newWeight) ? +newWeight : 1.0;
+
+    setKeywords((prev) => {
+      const next = [...prev, { id: newId, word: newWord.trim(), weight }];
+      if (onChange) onChange(next); // ✅ Propagation immédiate
+      return next;
     });
+
     setNewWord("");
     setNewWeight(1.0);
   };
- useEffect(() => {
-   try {
-     onChange(Array.isArray(keywords) ? keywords : []);
-   } catch (e) {
-      alert("Erreur lors de la mise à jour des mots-clés" + e.message);
-   }
- }, [keywords, onChange]);
   return (
     <div style={style}>
       <h3>Mots-clés du poste</h3>
 
       {/* Liste actuelle */}
-      <ul> 
+      <ul>
         {keywords.map((k) => (
           <li key={k.id}>
             {k.word} – Poids : {k.weight}
@@ -69,9 +58,6 @@ export default function ChecklistJob({ onChange }) {
         step="1"
       />
       <button onClick={addKeyword}>Ajouter le mot-clé</button>
-      <pre>{JSON.stringify(keywords, null, 2)}</pre>
-
-      {/* Pour voir le JSON généré */}
     </div>
   );
 }

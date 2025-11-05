@@ -1,5 +1,4 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+
  function Accueil() {
   return (
     <div style={{ margin: "2rem auto", maxWidth: 800, padding: "2rem", border: "1px solid #ccc", borderRadius: "8px" }}>

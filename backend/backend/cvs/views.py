@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework import status, generics
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from .models import Candidate, Job, Resume
-from .serializers import CandidateSerializer, CandidateListSerializer, JobSerializer
+from .serializers import CandidateSerializer, CandidateListSerializer, JobSerializer, ResumeSerializer
 from .services.scoring import score_resume
 from rest_framework.views import APIView
 from rest_framework.generics import ListAPIView
@@ -67,8 +67,9 @@ class UploadAndScoreAPIView(APIView):
         # block=True => renvoie 429 si limite dépassée
         decorated = ratelimit(key='ip', rate='3/m', method='POST', block=True)(super().dispatch)
         return decorated(request, *args, **kwargs)
-    @transaction.atomic
+    
     def post(self, request):
+        print(request.data)
         """
         Upload a candidate's CV and calculate the matching score against a job.
         Returns the candidate data and the score.
@@ -84,7 +85,7 @@ class UploadAndScoreAPIView(APIView):
                 candidate = serializer.save(user=None)
                 logger.info(f"Candidat {candidate.id} créé en mode anonyme: {candidate.phone}, {candidate.email}")
         
-            # Calculate score if a CV is present
+            #Calculate score if a CV is present
             score = 0.0
             try:
                 job_id = request.data.get("job")
@@ -107,6 +108,7 @@ class UploadAndScoreAPIView(APIView):
                 "candidate": CandidateSerializer(candidate).data,
                 "score": score
             }, status=status.HTTP_201_CREATED)
+        print("❌ Serializer errors:", serializer.errors)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -157,26 +159,62 @@ class UploadResumeAPIView(APIView):
     permission_classes = [AllowAny]
 
     def dispatch(self, request, *args, **kwargs):
-        # Applique le ratelimit sur toute la view DRF
-        # block=True => renvoie 429 si limite dépassée
-        decorated = ratelimit(key='ip', rate='3/m', method='POST', block=True)(super().dispatch)
+        """         Applique le ratelimit sur toute la view DRF
+        block=True => renvoie 429 si limite dépassée
+        """
+        if request.user.is_authenticated:
+            rate = '10/m'
+            key = 'user'
+        else:
+            rate = '3/m'
+            key = 'ip'
+        decorated = ratelimit(key=key, rate=rate, method='POST', block=True)(super().dispatch)        
         return decorated(request, *args, **kwargs)
 
-
+    @transaction.atomic
     def post(self, request, candidate_id):
         """
         Upload a resume file for the specified candidate.
-        """
-        try:
-            candidate = Candidate.objects.get(id=candidate_id, user=request.user)
-        except Candidate.DoesNotExist:
-            return Response({"detail": "Candidate not found."}, status=status.HTTP_404_NOT_FOUND)
-
+        """        
+        # Vérifier d'abord si le fichier est présent
         if 'file' not in request.FILES:
-            return Response({"detail": "No file provided."}, status=status.HTTP_400_BAD_REQUEST)
+            print("❌ No file in request")
+            return Response({"file": ["No file provided."]}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            if request.user.is_authenticated:
+                # Pour les utilisateurs authentifiés, vérifier que le candidat leur appartient
+                print(f"👤 Utilisateur authentifié: {request.user.id}")
+                candidate = Candidate.objects.select_for_update().get(
+                    id=candidate_id,
+                    user=request.user)
+            else:
+                # Pour les utilisateurs anonymes, juste vérifier que le candidat existe
+                candidate = Candidate.objects.select_for_update().get(id=candidate_id)
+        except Candidate.DoesNotExist:
+            return Response({"candidate": ["Invalid pk \"{}\" - object does not exist.".format(candidate_id)]}, status=status.HTTP_400_BAD_REQUEST)
 
         resume_file = request.FILES['file']
-        resume = Resume.objects.create(candidate=candidate, file=resume_file)
-        return Response({"detail": "Resume uploaded successfully.", "resume_id": resume.id}, status=status.HTTP_201_CREATED)
-    
-                        
+        
+        # Valider le fichier avec le serializer
+        file_serializer = ResumeSerializer(data={'file': resume_file})
+        if not file_serializer.is_valid():
+            return Response(file_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        with transaction.atomic():
+            Resume.objects.filter(candidate=candidate).delete()  # Supprime tous les CV existants
+            resume = Resume.objects.create(candidate=candidate, file=resume_file)
+
+        try:
+            logger.info(f"Resume uploaded for candidate {candidate.id} by user {request.user.id if request.user.is_authenticated else 'anonymous'}")
+            # Calculate and save score if a job is associated with the candidate
+            if candidate.job_id:
+                candidate.score = score_resume(resume.file.path, str(candidate.job_id))
+            else:
+                candidate.score = 0.0
+            candidate.save(update_fields=['score'])
+
+        except Exception as e:
+            logger.error(f"Error logging resume upload for candidate {candidate.id}: {e}", exc_info=True)
+
+        return Response({"detail": "Resume uploaded successfully.", "resume_id": resume.id, "score": candidate.score}, status=status.HTTP_201_CREATED)
