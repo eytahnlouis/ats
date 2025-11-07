@@ -96,6 +96,6 @@ class ResumeSerializer(serializers.ModelSerializer):
         # Validation de la taille du fichier (max 3MB)
         max_size = 3 * 1024 * 1024  # 3MB
         if value.size >= max_size:
-            raise serializers.ValidationError("La taille du fichier dépasse la limite de 5MB.")
+            raise serializers.ValidationError("La taille du fichier dépasse la limite de f{max_size}.")
         
         return value
